@@ -1,0 +1,7 @@
+MODEL_PATH = r"/Users/aldryne/Downloads/vehicle_detection_only/best.pt"
+VIDEO_PATH = r"/Users/aldryne/Downloads/vehicle_detection_only/vehicletest.mp4"
+
+123M4buh4y!
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://hswsvamqenvoojhfqbzf.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzd3N2YW1xZW52b29qaGZxYnpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NDcxNjQsImV4cCI6MjEwMjAyMzE2NH0.YX2-p4zE7XiSyirkV1Knnlw1e3fBpyqd4CUMVo99l_k")

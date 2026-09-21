@@ -1,0 +1,16 @@
+# UI only. Your detector's own deps (ultralytics, opencv, supabase, pillow,
+# python-dotenv) stay as they are - install these into the same environment,
+# since the app launches the detector with sys.executable.
+#
+# huggingface_hub is pinned: gradio 4.x only declares huggingface_hub>=0.19.3
+# with no upper bound, so an unconstrained install grabs the newest
+# huggingface_hub - which dropped the HfFolder class gradio's own oauth
+# module still imports, breaking `import gradio` with an ImportError. Pinning
+# below keeps a version that still has HfFolder.
+gradio==4.44.1
+huggingface_hub==0.25.2
+pillow
+
+# run pip3 install -r requirements.txt && python3 app.py
+# run python3 -m pip install --upgrade websockets
+
