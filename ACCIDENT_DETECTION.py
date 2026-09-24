@@ -27,7 +27,7 @@ ACCIDENT_MODEL_PATH = "best_accident_Aug28.pt" # CHANGE PATH TO ACCIDENT MODEL
 # If either dedicated model above is missing, fall back to this single
 # combined model instead of crashing on startup.
 FALLBACK_MODEL_PATH = "best_accident_Aug28.pt"
-VIDEO_PATH = "ScreenRecording_06-16-2026 00-59-54_1.mov" # CHANGE PATH TO VIDEO
+VIDEO_PATH = "tbone1.mp4" # CHANGE PATH TO VIDEO
 
 CONFIDENCE = 0.001 #CONFIDENCE FOR VEHICLE DETECTION
 ACCIDENT_CONFIDENCE = 0.01 #CONFIDENCE FOR ACCIDENT DETECTION.
@@ -76,7 +76,7 @@ SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 # Must match a row already in your `cameras` table (see schema.sql
 # seed data). Update these to the real camera this video corresponds to.
 CAMERA_ID = os.environ.get("CAMERA_ID")  # uuid string, or None
-CAMERA_LOCATION = os.environ.get("CAMERA_LOCATION", "TEST CAMERA - TEST LOCATION aldryne test")
+CAMERA_LOCATION = os.environ.get("CAMERA_LOCATION")
 
 # Video files have no real-world start time by themselves - anchor
 # frame_idx/fps (video-relative seconds) to an actual wall-clock
@@ -1696,3 +1696,4 @@ if pending_gifs:
         t.join()
 
 print("Detection stopped.")
+
