@@ -29,9 +29,13 @@ from pathlib import Path
 
 import gradio as gr
 from PIL import Image
+from dotenv import load_dotenv
+from supabase import create_client
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-DETECTOR_NAME = "vehicle_accident_detection.py"
+DETECTOR_NAME = "ACCIDENT_DETECTION.py"
 
 # app.py lives inside vehicle_detection_only, right next to the detector.
 DETECTOR_SCRIPT = Path(os.environ.get("DETECTOR_SCRIPT", BASE_DIR / DETECTOR_NAME)).resolve()
@@ -40,6 +44,74 @@ RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 POLL_SECONDS = 0.4
 MAX_LOG_LINES = 400
+LOCATIONS = [
+    "Muntinlupa",
+    "Pasay",
+    "Valenzuela",
+    "Mandaluyong",
+    "San Juan",
+    "Navotas",
+    "Caloocan",
+    "Malabon",
+    "Quezon City",
+    "Pateros",
+    "Manila",
+    "Taguig",
+    "Paranaque",
+    "Marikina",
+    "Las Pinas",
+]
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+
+
+def load_cameras():
+    """Load camera rows for the location picker without blocking app startup."""
+    if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
+        print("[warn] Supabase credentials are not configured; camera picker is empty.")
+        return []
+    try:
+        client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        response = client.table("cameras").select("*").execute()
+        return response.data or []
+    except Exception as exc:
+        print(f"[warn] Could not load cameras from Supabase: {exc}")
+        return []
+
+
+CAMERAS = load_cameras()
+
+
+def camera_location(camera):
+    value = camera.get("location") or camera.get("city") or camera.get("area")
+    return str(value).strip() if value is not None else ""
+
+
+def camera_label(camera):
+    name = camera.get("name") or camera.get("camera_name") or camera.get("label")
+    camera_id = camera.get("id")
+    if name and camera_id:
+        return f"{name} ({camera_id})"
+    return str(name or camera_id or "Unnamed camera")
+
+
+def camera_id(camera):
+    value = camera.get("id") or camera.get("camera_id")
+    return str(value) if value is not None else ""
+
+
+def camera_choices(location):
+    return [
+        (camera_label(camera), camera_id(camera))
+        for camera in CAMERAS
+        if camera_location(camera).casefold() == str(location or "").casefold()
+        and camera_id(camera)
+    ]
+
+
+def cameras_for_location(location):
+    choices = camera_choices(location)
+    return gr.update(choices=choices, value=choices[0][1] if choices else None)
 
 # --- Lines worth pulling out of the detector's stdout -------------------
 RE_PROGRESS = re.compile(r"^\[progress\]\s+(\d+)\s*/\s*(\d+)")
@@ -110,7 +182,7 @@ class Run:
     def is_running(self):
         return self.status == "running"
 
-    def start(self, video_path):
+    def start(self, video_path, location, selected_camera_id):
         if not DETECTOR_SCRIPT.exists():
             raise FileNotFoundError(
                 f"No detector at {DETECTOR_SCRIPT}. Make sure app.py is inside "
@@ -133,6 +205,8 @@ class Run:
             "OUTPUT_VIDEO_PATH": str(run_dir / "annotated.mp4"),
             "PREVIEW_PATH": str(run_dir / "preview.jpg"),
             "DEBUG_SNAPSHOT_DIR": str(run_dir / "snapshots"),
+            "CAMERA_LOCATION": str(location or ""),
+            "CAMERA_ID": str(selected_camera_id or ""),
             "PYTHONUNBUFFERED": "1",
         })
 
@@ -381,7 +455,7 @@ def view(s):
     )
 
 
-def start(video_path, progress=gr.Progress(track_tqdm=False)):
+def start(video_path, location, selected_camera_id, progress=gr.Progress(track_tqdm=False)):
     """Launch a run, then stream the page until the detector exits.
 
     Detecting an accident is not an exit condition - nothing here breaks out
@@ -394,7 +468,7 @@ def start(video_path, progress=gr.Progress(track_tqdm=False)):
         return
 
     try:
-        run.start(video_path)
+        run.start(video_path, location, selected_camera_id)
     except Exception as e:
         s = run.snapshot()
         yield view({**s, "status": "failed", "error": str(e)})
@@ -427,6 +501,19 @@ with gr.Blocks(title="Accident detector", theme=gr.themes.Soft()) as demo:
         with gr.Column(scale=1):
             video_in = gr.Video(label="Traffic footage", sources=["upload"])
             with gr.Row():
+                location_in = gr.Dropdown(
+                    choices=LOCATIONS,
+                    value=LOCATIONS[0],
+                    label="Accident location",
+                    allow_custom_value=False,
+                )
+                camera_in = gr.Dropdown(
+                    choices=camera_choices(LOCATIONS[0]),
+                    label="Camera",
+                    info="Loaded from the cameras database",
+                    allow_custom_value=False,
+                )
+            with gr.Row():
                 run_btn = gr.Button("Run the detector", variant="primary")
                 stop_btn = gr.Button("Stop this run")
             status_md = gr.Markdown("### Waiting for a video\nUpload a video to begin.")
@@ -450,7 +537,8 @@ with gr.Blocks(title="Accident detector", theme=gr.themes.Soft()) as demo:
         log_box = gr.Textbox(lines=18, max_lines=18, show_label=False, interactive=False)
 
     outputs = [status_md, events_df, preview_img, gallery, found_md, log_box, annotated_out]
-    run_btn.click(start, inputs=[video_in], outputs=outputs)
+    location_in.change(cameras_for_location, inputs=[location_in], outputs=[camera_in])
+    run_btn.click(start, inputs=[video_in, location_in, camera_in], outputs=outputs)
     stop_btn.click(stop, inputs=None, outputs=None)
 
 

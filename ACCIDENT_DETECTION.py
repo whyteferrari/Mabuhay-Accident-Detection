@@ -27,7 +27,10 @@ ACCIDENT_MODEL_PATH = "best_accident_Aug28.pt" # CHANGE PATH TO ACCIDENT MODEL
 # If either dedicated model above is missing, fall back to this single
 # combined model instead of crashing on startup.
 FALLBACK_MODEL_PATH = "best_accident_Aug28.pt"
-VIDEO_PATH = "tbone1.mp4" # CHANGE PATH TO VIDEO
+VIDEO_PATH = os.environ.get("VIDEO_PATH", "tbone1.mp4")
+HEADLESS = os.environ.get("HEADLESS", "0") == "1"
+OUTPUT_VIDEO_PATH = os.environ.get("OUTPUT_VIDEO_PATH")
+PREVIEW_PATH = os.environ.get("PREVIEW_PATH")
 
 CONFIDENCE = 0.001 #CONFIDENCE FOR VEHICLE DETECTION
 ACCIDENT_CONFIDENCE = 0.01 #CONFIDENCE FOR ACCIDENT DETECTION.
@@ -340,7 +343,7 @@ ALERT_COOLDOWN_SECONDS = 5.0
 # without cluttering the real `accidents` table with unconfirmed
 # guesses.
 DEBUG_SAVE_TRIGGER_SNAPSHOTS = True
-DEBUG_SNAPSHOT_DIR = "debug_snapshots"
+DEBUG_SNAPSHOT_DIR = os.environ.get("DEBUG_SNAPSHOT_DIR", "debug_snapshots")
 if DEBUG_SAVE_TRIGGER_SNAPSHOTS:
     os.makedirs(DEBUG_SNAPSHOT_DIR, exist_ok=True)
 
@@ -394,6 +397,22 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 if fps <= 0:
     fps = 30.0
 delay = max(1, int(1000 / fps))
+total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+video_writer = None
+if OUTPUT_VIDEO_PATH:
+    output_dir = os.path.dirname(os.path.abspath(OUTPUT_VIDEO_PATH))
+    os.makedirs(output_dir, exist_ok=True)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    video_writer = cv2.VideoWriter(
+        OUTPUT_VIDEO_PATH,
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (frame_width, frame_height),
+    )
+    if not video_writer.isOpened():
+        raise RuntimeError(f"Could not create output video: {OUTPUT_VIDEO_PATH}")
 
 
 # ============================================================
@@ -1674,9 +1693,29 @@ while cap.isOpened():
                 vision_confirmed_overlap[key] = False
                 overlap_peak_iou[key] = 0.0
 
-    cv2.imshow("Vehicle Detection & Speed Estimation", annotated_frame)
+    if video_writer is not None:
+        video_writer.write(annotated_frame)
+    if PREVIEW_PATH:
+        preview_dir = os.path.dirname(os.path.abspath(PREVIEW_PATH))
+        os.makedirs(preview_dir, exist_ok=True)
+        preview_tmp = PREVIEW_PATH + ".tmp.jpg"
+        if cv2.imwrite(preview_tmp, annotated_frame):
+            try:
+                os.replace(preview_tmp, PREVIEW_PATH)
+            except PermissionError:
+                # The UI may still have the previous preview open on Windows.
+                # Keep that frame and let the next iteration publish a newer one.
+                try:
+                    os.remove(preview_tmp)
+                except OSError:
+                    pass
+    if total_frames and (frame_idx == 0 or frame_idx % max(1, int(fps / 2)) == 0):
+        print(f"[progress] {frame_idx + 1}/{total_frames}", flush=True)
 
-    key_pressed = cv2.waitKey(delay) & 0xFF
+    if not HEADLESS:
+        cv2.imshow("Vehicle Detection & Speed Estimation", annotated_frame)
+
+    key_pressed = (cv2.waitKey(delay) & 0xFF) if not HEADLESS else -1
     if key_pressed == 27:  # ESC
         break
 
@@ -1684,7 +1723,10 @@ while cap.isOpened():
 
 
 cap.release()
-cv2.destroyAllWindows()
+if video_writer is not None:
+    video_writer.release()
+if not HEADLESS:
+    cv2.destroyAllWindows()
 
 # Any GIF still waiting on post-event footage gets built with whatever
 # it has (video ended or ESC was pressed), then in-flight uploads finish.

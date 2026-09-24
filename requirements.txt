@@ -10,6 +10,10 @@
 gradio==4.44.1
 huggingface_hub==0.25.2
 pillow
+supabase==2.31.0
+python-dotenv
+websockets==15.0
+pydantic==2.10.6
 
 # run pip3 install -r requirements.txt && python3 app.py
 # run python3 -m pip install --upgrade websockets
